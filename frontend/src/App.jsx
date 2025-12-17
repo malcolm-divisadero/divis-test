@@ -3,11 +3,23 @@ import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import InviteUser from './components/InviteUser'
+import AcceptInvite from './pages/AcceptInvite'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 function AppContent() {
-  const { user, session, loading: authLoading, signInWithGoogle, signOut } = useAuth()
+  const { 
+    user, 
+    session, 
+    loading: authLoading, 
+    signingIn, 
+    signingOut, 
+    authError,
+    signInWithGoogle, 
+    signOut,
+    clearError
+  } = useAuth()
   const [count, setCount] = useState(0)
   const [apiMessage, setApiMessage] = useState('')
   const [healthStatus, setHealthStatus] = useState('')
@@ -16,9 +28,24 @@ function AppContent() {
   const [brands, setBrands] = useState([])
   const [brandsLoading, setBrandsLoading] = useState(false)
   const [brandsError, setBrandsError] = useState(null)
-  const [signInError, setSignInError] = useState(null)
+  const [showInviteForm, setShowInviteForm] = useState(false)
+  const [currentOrgSlug, setCurrentOrgSlug] = useState('default-org')
+  const [orgInfo, setOrgInfo] = useState(null)
+  const [orgLoading, setOrgLoading] = useState(false)
+  const [orgError, setOrgError] = useState(null)
+  const [isSuperuser, setIsSuperuser] = useState(false)
 
   useEffect(() => {
+    // Check if we're on the accept-invite page
+    const isAcceptInvitePage = window.location.pathname.includes('/auth/accept-invite') || 
+                                window.location.search.includes('success') ||
+                                window.location.search.includes('error')
+    
+    if (isAcceptInvitePage) {
+      // Show accept invite page
+      return
+    }
+
     // Fetch data from backend on component mount
     fetchApiData()
     // Test backend profiles endpoint
@@ -26,6 +53,67 @@ function AppContent() {
     // Fetch brands from backend
     fetchBrands()
   }, [])
+
+  // Fetch org info when user is signed in
+  useEffect(() => {
+    if (user && session) {
+      fetchOrgInfo()
+    } else {
+      setOrgInfo(null)
+    }
+  }, [user, session])
+
+  const fetchOrgInfo = async () => {
+    if (!session || !session.access_token) {
+      return
+    }
+
+    setOrgLoading(true)
+    setOrgError(null)
+
+    try {
+      const response = await fetch(`${API_URL}/org/me`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || errorData.error || `HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log('[ORG] Response:', data)
+      console.log('[ORG] is_superuser value:', data.is_superuser, 'type:', typeof data.is_superuser)
+
+      if (data.status === 'success' && data.org) {
+        setOrgInfo(data.org)
+        setCurrentOrgSlug(data.org.org_slug)
+        // Explicitly convert to boolean - handle true, "true", 1, etc.
+        const superuserValue = data.is_superuser === true || data.is_superuser === 'true' || data.is_superuser === 1
+        console.log('[ORG] Setting isSuperuser to:', superuserValue)
+        setIsSuperuser(superuserValue)
+        setOrgError(null)
+      } else {
+        const errorMsg = data.error || data.detail || 'Failed to fetch organization info'
+        console.error('[ORG] Error:', errorMsg)
+        setOrgError(errorMsg)
+      }
+    } catch (error) {
+      console.error('[ORG] Fetch error:', error)
+      setOrgError(error.message || 'Failed to fetch organization info')
+    } finally {
+      setOrgLoading(false)
+    }
+  }
+
+  // Check if we should show accept invite page
+  const urlParams = new URLSearchParams(window.location.search)
+  const isAcceptInvite = window.location.pathname.includes('/auth/accept-invite') || 
+                         urlParams.get('success') || 
+                         urlParams.get('error')
 
   const fetchBackendProfiles = async () => {
     try {
@@ -81,6 +169,11 @@ function AppContent() {
   }
 
 
+  // Show accept invite page if on that route
+  if (isAcceptInvite) {
+    return <AcceptInvite />
+  }
+
   return (
     <>
       <div>
@@ -101,14 +194,98 @@ function AppContent() {
           <div>
             <p style={{ color: 'green' }}><strong>✓ Signed in as:</strong> {user.email}</p>
             <p><strong>User ID:</strong> {user.id}</p>
+            <p style={{ marginTop: '5px' }}>
+              <strong>Superuser:</strong> {isSuperuser ? (
+                <span style={{ color: 'purple', fontWeight: 'bold' }}>⭐ Yes</span>
+              ) : (
+                <span style={{ color: '#666' }}>No</span>
+              )}
+            </p>
             {session && (
               <p style={{ fontSize: '0.8em', color: '#666' }}>
                 Session expires: {new Date(session.expires_at * 1000).toLocaleString()}
               </p>
             )}
-            <button onClick={signOut} style={{ marginTop: '10px' }}>
-              Sign Out
+            
+            {/* Organization Info */}
+            {orgLoading ? (
+              <p style={{ marginTop: '15px', fontSize: '0.9em' }}>Loading organization info...</p>
+            ) : orgError ? (
+              <div style={{ marginTop: '15px' }}>
+                <p style={{ color: 'orange', fontSize: '0.9em' }}>
+                  ⚠ {orgError}
+                </p>
+                <button onClick={fetchOrgInfo} style={{ fontSize: '0.8em', marginTop: '5px' }}>
+                  Retry
+                </button>
+              </div>
+            ) : orgInfo ? (
+              <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '10px' }}>Organization</h3>
+                <p style={{ margin: '5px 0' }}><strong>Name:</strong> {orgInfo.org_slug}</p>
+                <p style={{ margin: '5px 0' }}><strong>ID:</strong> {orgInfo.org_id}</p>
+                {orgInfo.user_count !== undefined && (
+                  <p style={{ margin: '5px 0' }}><strong>Members:</strong> {orgInfo.user_count}</p>
+                )}
+                <p style={{ margin: '5px 0' }}>
+                  <strong>Your Role:</strong> {isSuperuser ? (
+                    <span style={{ color: 'purple', fontWeight: 'bold' }}>⭐ Superuser</span>
+                  ) : (
+                    <span style={{ color: '#666' }}>Member</span>
+                  )}
+                </p>
+                {orgInfo.created_at && (
+                  <p style={{ margin: '5px 0', fontSize: '0.9em', color: '#666' }}>
+                    Created: {new Date(orgInfo.created_at).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            ) : null}
+            
+            <button 
+              onClick={async () => {
+                try {
+                  await signOut()
+                } catch (error) {
+                  // Error is handled in AuthContext
+                }
+              }}
+              disabled={signingOut}
+              style={{ marginTop: '10px' }}
+            >
+              {signingOut ? 'Signing out...' : 'Sign Out'}
             </button>
+            {authError && (
+              <div style={{ marginTop: '10px' }}>
+                <p style={{ color: 'red', fontSize: '0.9em' }}>
+                  Error: {authError}
+                </p>
+                <button onClick={clearError} style={{ fontSize: '0.8em', marginTop: '5px' }}>
+                  Dismiss
+                </button>
+              </div>
+            )}
+            <div style={{ marginTop: '15px' }}>
+              <button 
+                onClick={() => setShowInviteForm(!showInviteForm)}
+                style={{ marginTop: '10px' }}
+                disabled={!orgInfo}
+              >
+                {showInviteForm ? 'Hide' : 'Invite User'}
+              </button>
+              {showInviteForm && session && orgInfo && (
+                <InviteUser 
+                  orgSlug={currentOrgSlug}
+                  session={session}
+                  onSuccess={(data) => {
+                    console.log('Invite sent:', data)
+                    setShowInviteForm(false)
+                    // Refresh org info to update member count
+                    fetchOrgInfo()
+                  }}
+                />
+              )}
+            </div>
           </div>
         ) : (
           <div>
@@ -116,19 +293,24 @@ function AppContent() {
             <button 
               onClick={async () => {
                 try {
-                  setSignInError(null)
                   await signInWithGoogle()
                 } catch (error) {
-                  setSignInError(error.message || 'Failed to sign in')
+                  // Error is handled in AuthContext
                 }
               }}
+              disabled={signingIn}
             >
-              Sign in with Google
+              {signingIn ? 'Redirecting to Google...' : 'Sign in with Google'}
             </button>
-            {signInError && (
-              <p style={{ color: 'red', fontSize: '0.9em', marginTop: '10px' }}>
-                Error: {signInError}
-              </p>
+            {authError && (
+              <div style={{ marginTop: '10px' }}>
+                <p style={{ color: 'red', fontSize: '0.9em' }}>
+                  Error: {authError}
+                </p>
+                <button onClick={clearError} style={{ fontSize: '0.8em', marginTop: '5px' }}>
+                  Dismiss
+                </button>
+              </div>
             )}
           </div>
         )}

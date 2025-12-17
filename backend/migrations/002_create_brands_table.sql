@@ -69,3 +69,4 @@ CREATE POLICY "Superusers can delete brands"
         )
     );
 
+

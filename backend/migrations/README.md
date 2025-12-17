@@ -33,3 +33,4 @@ psql -h db.nhiweevbieqnjnoowmcj.supabase.co -U postgres -d postgres -f migration
 
 Migrations should be run in numerical order (001, 002, etc.) to ensure dependencies are created correctly.
 
+

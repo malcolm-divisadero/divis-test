@@ -156,3 +156,4 @@ const testConnection = async () => {
 - **Use anon key in frontend** - It respects RLS policies
 - **Review RLS policies** - Ensure they match your security requirements
 
+

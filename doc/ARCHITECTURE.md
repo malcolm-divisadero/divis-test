@@ -240,3 +240,4 @@ If you're unsure whether something follows the architecture rules, ask:
 - Linting rules can be added to prevent Supabase imports in frontend
 - Documentation should always show backend API usage, not direct Supabase calls
 
+

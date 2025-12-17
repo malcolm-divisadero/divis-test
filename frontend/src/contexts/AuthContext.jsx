@@ -15,6 +15,9 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [signingIn, setSigningIn] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+  const [authError, setAuthError] = useState(null)
 
   useEffect(() => {
     // Get initial session
@@ -37,24 +40,57 @@ export const AuthProvider = ({ children }) => {
   }, [])
 
   const signInWithGoogle = async () => {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}`,
-      },
-    })
-    if (error) {
-      console.error('Error signing in with Google:', error)
+    setSigningIn(true)
+    setAuthError(null)
+    
+    try {
+      // Use environment variable if set, otherwise use current origin (automatically adapts to dev/prod)
+      const redirectTo = import.meta.env.VITE_AUTH_REDIRECT_URL || window.location.origin
+      
+      console.log('OAuth redirect to:', redirectTo)
+      console.log('Current origin:', window.location.origin)
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectTo,
+        },
+      })
+      
+      if (error) {
+        console.error('Error signing in with Google:', error)
+        setAuthError(error.message || 'Failed to sign in with Google')
+        throw error
+      }
+      
+      return data
+    } catch (error) {
+      setAuthError(error.message || 'Failed to sign in')
       throw error
+    } finally {
+      setSigningIn(false)
     }
-    return data
   }
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      console.error('Error signing out:', error)
+    setSigningOut(true)
+    setAuthError(null)
+    
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('Error signing out:', error)
+        setAuthError(error.message || 'Failed to sign out')
+        throw error
+      }
+      // Clear user and session on successful sign out
+      setUser(null)
+      setSession(null)
+    } catch (error) {
+      setAuthError(error.message || 'Failed to sign out')
       throw error
+    } finally {
+      setSigningOut(false)
     }
   }
 
@@ -62,10 +98,15 @@ export const AuthProvider = ({ children }) => {
     user,
     session,
     loading,
+    signingIn,
+    signingOut,
+    authError,
     signInWithGoogle,
     signOut,
+    clearError: () => setAuthError(null),
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
+
 
