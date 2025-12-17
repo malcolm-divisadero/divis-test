@@ -99,16 +99,16 @@ async def check_user_permission(user: dict, org_slug: str, require_superuser: bo
         tuple: (has_permission: bool, org_id: Optional[int])
     """
     try:
-        print(f"[PERMISSION] Starting permission check for user {user.get('id')} on org {org_slug}")
+        print(f"🔐 [PERMISSION] Starting permission check for user {user.get('id')} on org {org_slug}")
         supabase_client = get_client(use_service_role=True)  # Use admin to check profiles
         
         # First, check if org exists
-        print(f"[PERMISSION] Checking if org '{org_slug}' exists...")
+        print(f"🔍 [PERMISSION] Checking if org '{org_slug}' exists...")
         try:
             org_response = supabase_client.table("orgs").select("*").eq("org_slug", org_slug).execute()
-            print(f"[PERMISSION] Org query completed: {len(org_response.data) if org_response.data else 0} orgs found")
+            print(f"✅ [PERMISSION] Org query completed: {len(org_response.data) if org_response.data else 0} orgs found")
         except Exception as e:
-            print(f"[PERMISSION] Error querying orgs: {e}")
+            print(f"❌ [PERMISSION] Error querying orgs: {e}")
             import traceback
             traceback.print_exc()
             raise
@@ -116,41 +116,41 @@ async def check_user_permission(user: dict, org_slug: str, require_superuser: bo
         org_id = None
         if not org_response.data or len(org_response.data) == 0:
             # Org doesn't exist - create it for development purposes
-            print(f"[PERMISSION] Org '{org_slug}' not found, creating it...")
+            print(f"➕ [PERMISSION] Org '{org_slug}' not found, creating it...")
             try:
                 new_org_response = supabase_client.table("orgs").insert({
                     "org_slug": org_slug
                 }).execute()
                 if new_org_response.data and len(new_org_response.data) > 0:
                     org_id = new_org_response.data[0]["org_id"]
-                    print(f"[PERMISSION] Created org '{org_slug}' with id {org_id}")
+                    print(f"✅ [PERMISSION] Created org '{org_slug}' with id {org_id}")
                 else:
-                    print(f"[PERMISSION] Failed to create org - no data returned")
+                    print(f"❌ [PERMISSION] Failed to create org - no data returned")
                     return False, None
             except Exception as e:
-                print(f"[PERMISSION] Failed to create org: {e}")
+                print(f"❌ [PERMISSION] Failed to create org: {e}")
                 import traceback
                 traceback.print_exc()
                 return False, None
         else:
             org = org_response.data[0]
             org_id = org["org_id"]
-            print(f"[PERMISSION] Found org '{org_slug}' with id {org_id}")
+            print(f"✅ [PERMISSION] Found org '{org_slug}' with id {org_id}")
         
         # Get user's profile
-        print(f"[PERMISSION] Checking profile for user {user['id']}...")
+        print(f"👤 [PERMISSION] Checking profile for user {user['id']}...")
         try:
             profile_response = supabase_client.table("profiles").select("*").eq("id", user["id"]).execute()
-            print(f"[PERMISSION] Profile query completed: {len(profile_response.data) if profile_response.data else 0} profiles found")
+            print(f"✅ [PERMISSION] Profile query completed: {len(profile_response.data) if profile_response.data else 0} profiles found")
         except Exception as e:
-            print(f"[PERMISSION] Error querying profiles: {e}")
+            print(f"❌ [PERMISSION] Error querying profiles: {e}")
             import traceback
             traceback.print_exc()
             raise
         
         # If user has no profile, create one and allow access to the org
         if not profile_response.data or len(profile_response.data) == 0:
-            print(f"[PERMISSION] User {user['id']} has no profile, creating one with org_id {org_id}")
+            print(f"➕ [PERMISSION] User {user['id']} has no profile, creating one with org_id {org_id}")
             try:
                 # Create profile for user
                 supabase_client.table("profiles").insert({
@@ -159,16 +159,16 @@ async def check_user_permission(user: dict, org_slug: str, require_superuser: bo
                     "is_activated": True,
                     "is_superuser": False
                 }).execute()
-                print(f"[PERMISSION] Created profile for user {user['id']}")
+                print(f"✅ [PERMISSION] Created profile for user {user['id']}")
                 return True, org_id
             except Exception as e:
-                print(f"[PERMISSION] Failed to create profile: {e}")
+                print(f"❌ [PERMISSION] Failed to create profile: {e}")
                 import traceback
                 traceback.print_exc()
                 return False, None
         
         profile = profile_response.data[0]
-        print(f"[PERMISSION] User profile: org_id={profile.get('org_id')}, is_superuser={profile.get('is_superuser')}")
+        print(f"📋 [PERMISSION] User profile: org_id={profile.get('org_id')}, is_superuser={profile.get('is_superuser')}")
         
         # Check if superuser
         if require_superuser:
@@ -176,7 +176,7 @@ async def check_user_permission(user: dict, org_slug: str, require_superuser: bo
         
         # Check if user is superuser (can do anything)
         if profile.get("is_superuser", False):
-            print(f"[PERMISSION] User is superuser, granting permission")
+            print(f"⭐ [PERMISSION] User is superuser, granting permission")
             return True, org_id
         
         # Regular user: check if they belong to the org
@@ -184,15 +184,15 @@ async def check_user_permission(user: dict, org_slug: str, require_superuser: bo
         
         # If user has no org_id, assign them to this org and grant permission
         if not user_org_id:
-            print(f"[PERMISSION] User {user['id']} has no org_id, assigning to org {org_id}")
+            print(f"🔄 [PERMISSION] User {user['id']} has no org_id, assigning to org {org_id}")
             try:
                 supabase_client.table("profiles").update({
                     "org_id": org_id
                 }).eq("id", user["id"]).execute()
-                print(f"[PERMISSION] Updated user profile with org_id {org_id}")
+                print(f"✅ [PERMISSION] Updated user profile with org_id {org_id}")
                 return True, org_id
             except Exception as e:
-                print(f"[PERMISSION] Failed to update profile: {e}")
+                print(f"❌ [PERMISSION] Failed to update profile: {e}")
                 import traceback
                 traceback.print_exc()
                 # Still grant permission if update fails - allow them to proceed
@@ -200,12 +200,12 @@ async def check_user_permission(user: dict, org_slug: str, require_superuser: bo
         
         # Check if org_id matches user's org
         if user_org_id == org_id:
-            print(f"[PERMISSION] User belongs to org {org_id}, granting permission")
+            print(f"✅ [PERMISSION] User belongs to org {org_id}, granting permission")
             return True, org_id
         
         # For development: if user's org doesn't match, still allow but log warning
         # In production, you might want to deny this
-        print(f"[PERMISSION] WARNING: User {user['id']} belongs to org {user_org_id}, but requested org {org_id} - allowing for development")
+        print(f"⚠️  [PERMISSION] WARNING: User {user['id']} belongs to org {user_org_id}, but requested org {org_id} - allowing for development")
         return True, org_id  # Allow for now - change to False in production if needed
         
     except Exception as e:

@@ -83,33 +83,75 @@ export default function InviteUser({ orgSlug, session, onSuccess }) {
   }
 
   return (
-    <div style={{ marginTop: '20px', padding: '15px', border: '1px solid #ddd', borderRadius: '8px' }}>
-      <h3>Invite User to Organization</h3>
+    <div style={{ 
+      padding: '12px', 
+      background: '#f9fafb', 
+      border: '1px solid #e5e7eb', 
+      borderRadius: '6px' 
+    }}>
+      <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: '600', color: '#1a1a1a' }}>
+        Invite User
+      </h3>
       <form onSubmit={handleInvite}>
-        <div style={{ marginBottom: '10px' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter email address"
+            placeholder="email@example.com"
             required
-            style={{ padding: '8px', width: '250px', marginRight: '10px' }}
+            style={{ 
+              flex: 1,
+              padding: '6px 10px', 
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              fontSize: '13px',
+              outline: 'none'
+            }}
             disabled={loading}
           />
-          <button type="submit" disabled={loading || !email}>
-            {loading ? 'Sending...' : 'Send Invite'}
+          <button 
+            type="submit" 
+            disabled={loading || !email}
+            style={{
+              padding: '6px 12px',
+              background: loading || !email ? '#d1d5db' : '#3b82f6',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: loading || !email ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {loading ? 'Sending...' : 'Send'}
           </button>
         </div>
       </form>
       {error && (
-        <p style={{ color: 'red', fontSize: '0.9em', marginTop: '10px' }}>
-          Error: {error}
-        </p>
+        <div style={{ 
+          marginTop: '8px', 
+          padding: '6px 8px', 
+          background: '#fee2e2', 
+          borderRadius: '4px' 
+        }}>
+          <p style={{ color: '#dc2626', fontSize: '12px', margin: 0 }}>
+            {error}
+          </p>
+        </div>
       )}
       {success && (
-        <p style={{ color: 'green', fontSize: '0.9em', marginTop: '10px' }}>
-          ✓ Invitation sent successfully!
-        </p>
+        <div style={{ 
+          marginTop: '8px', 
+          padding: '6px 8px', 
+          background: '#d1fae5', 
+          borderRadius: '4px' 
+        }}>
+          <p style={{ color: '#065f46', fontSize: '12px', margin: 0 }}>
+            ✓ Invitation sent successfully!
+          </p>
+        </div>
       )}
     </div>
   )

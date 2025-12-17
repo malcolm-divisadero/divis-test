@@ -4,8 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 import os
+from dotenv import load_dotenv
 from database import get_client
 from auth_utils import get_current_user, check_user_permission
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI(
     title="Divisadero API",
@@ -135,15 +139,29 @@ async def get_brand_by_slug(slug: str):
 async def get_my_org(current_user: dict = Depends(get_current_user)):
     """Get the current user's organization"""
     try:
-        print(f"[ORG/ME] Fetching org for user {current_user.get('id')}")
-        admin_client = get_client(use_service_role=True)
+        print(f"👤 [ORG/ME] Fetching org for user {current_user.get('id')}")
+        # Check if service role key is available
+        service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        if not service_role_key:
+            raise HTTPException(
+                status_code=500,
+                detail="SUPABASE_SERVICE_ROLE_KEY environment variable is not set. Please check your backend .env file."
+            )
+        
+        try:
+            admin_client = get_client(use_service_role=True)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to initialize Supabase admin client: {str(e)}"
+            )
         
         # Get user's profile to find org_id
         profile_response = admin_client.table("profiles").select("*").eq("id", current_user["id"]).execute()
-        print(f"[ORG/ME] Profile query result: {len(profile_response.data) if profile_response.data else 0} profiles found")
+        print(f"📊 [ORG/ME] Profile query result: {len(profile_response.data) if profile_response.data else 0} profiles found")
         
         if not profile_response.data or len(profile_response.data) == 0:
-            print(f"[ORG/ME] No profile found for user {current_user.get('id')}")
+            print(f"⚠️  [ORG/ME] No profile found for user {current_user.get('id')}")
             # Try to create a default profile with a default org
             try:
                 # Check if default-org exists, create if not
@@ -165,9 +183,9 @@ async def get_my_org(current_user: dict = Depends(get_current_user)):
                 
                 # Retry fetching profile
                 profile_response = admin_client.table("profiles").select("*").eq("id", current_user["id"]).execute()
-                print(f"[ORG/ME] Created profile and retried, found {len(profile_response.data) if profile_response.data else 0} profiles")
+                print(f"✅ [ORG/ME] Created profile and retried, found {len(profile_response.data) if profile_response.data else 0} profiles")
             except Exception as create_error:
-                print(f"[ORG/ME] Error creating profile: {create_error}")
+                print(f"❌ [ORG/ME] Error creating profile: {create_error}")
                 return {
                     "status": "error",
                     "error": f"User profile not found and could not be created: {str(create_error)}"
@@ -181,10 +199,10 @@ async def get_my_org(current_user: dict = Depends(get_current_user)):
         
         profile = profile_response.data[0]
         org_id = profile.get("org_id")
-        print(f"[ORG/ME] User profile org_id: {org_id}")
+        print(f"📋 [ORG/ME] User profile org_id: {org_id}")
         
         if not org_id:
-            print(f"[ORG/ME] User has no org_id, assigning to default-org")
+            print(f"🔄 [ORG/ME] User has no org_id, assigning to default-org")
             # Assign user to default org
             try:
                 default_org_response = admin_client.table("orgs").select("*").eq("org_slug", "default-org").execute()
@@ -196,9 +214,9 @@ async def get_my_org(current_user: dict = Depends(get_current_user)):
                 
                 # Update profile
                 admin_client.table("profiles").update({"org_id": org_id}).eq("id", current_user["id"]).execute()
-                print(f"[ORG/ME] Assigned user to org {org_id}")
+                print(f"✅ [ORG/ME] Assigned user to org {org_id}")
             except Exception as assign_error:
-                print(f"[ORG/ME] Error assigning org: {assign_error}")
+                print(f"❌ [ORG/ME] Error assigning org: {assign_error}")
                 return {
                     "status": "error",
                     "error": f"User is not associated with any organization and could not be assigned: {str(assign_error)}"
@@ -206,7 +224,7 @@ async def get_my_org(current_user: dict = Depends(get_current_user)):
         
         # Get org details
         org_response = admin_client.table("orgs").select("*").eq("org_id", org_id).execute()
-        print(f"[ORG/ME] Org query result: {len(org_response.data) if org_response.data else 0} orgs found")
+        print(f"🏢 [ORG/ME] Org query result: {len(org_response.data) if org_response.data else 0} orgs found")
         
         if not org_response.data or len(org_response.data) == 0:
             return {
@@ -219,7 +237,7 @@ async def get_my_org(current_user: dict = Depends(get_current_user)):
         # Get user count for this org
         users_response = admin_client.table("profiles").select("id", count="exact").eq("org_id", org_id).execute()
         user_count = users_response.count if hasattr(users_response, 'count') else len(users_response.data) if users_response.data else 0
-        print(f"[ORG/ME] Found org {org.get('org_slug')} with {user_count} members")
+        print(f"✅ [ORG/ME] Found org {org.get('org_slug')} with {user_count} members")
         
         # Get superuser status from profiles table (not users table)
         # profiles.is_superuser is a boolean NOT NULL DEFAULT FALSE
@@ -232,7 +250,7 @@ async def get_my_org(current_user: dict = Depends(get_current_user)):
         else:
             is_superuser_bool = bool(is_superuser)
         
-        print(f"[ORG/ME] User is_superuser from profiles table: {is_superuser} (type: {type(is_superuser)}, converted: {is_superuser_bool})")
+        print(f"⭐ [ORG/ME] User is_superuser from profiles table: {is_superuser} (type: {type(is_superuser)}, converted: {is_superuser_bool})")
         
         return {
             "status": "success",
@@ -246,7 +264,7 @@ async def get_my_org(current_user: dict = Depends(get_current_user)):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ORG/ME] Error: {e}")
+        print(f"❌ [ORG/ME] Error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(
@@ -276,12 +294,12 @@ async def invite_user(
     """
     try:
         # Check user permission
-        print(f"[INVITE] Checking permission for user {current_user.get('id')} on org {org_slug}")
+        print(f"🔐 [INVITE] Checking permission for user {current_user.get('id')} on org {org_slug}")
         try:
             has_permission, org_id = await check_user_permission(current_user, org_slug)
-            print(f"[INVITE] Permission check result: has_permission={has_permission}, org_id={org_id}")
+            print(f"✅ [INVITE] Permission check result: has_permission={has_permission}, org_id={org_id}")
         except Exception as perm_error:
-            print(f"[INVITE] Permission check error: {perm_error}")
+            print(f"❌ [INVITE] Permission check error: {perm_error}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Error checking permissions: {str(perm_error)}"
@@ -343,18 +361,26 @@ async def invite_user(
                 "invite": True  # This triggers an invite email
             }
             
-            print(f"[INVITE] Payload: email={invite_data.email}, org_slug={org_slug}, org_id={org_id}")
+            print(f"📧 [INVITE] Payload: email={invite_data.email}, org_slug={org_slug}, org_id={org_id}")
+            print(f"📦 [INVITE] Full payload: {payload}")
+            print(f"🚀 [INVITE] Sending invite request to {invite_url} for email {invite_data.email}")
             
-            print(f"Sending invite request to {invite_url} for email {invite_data.email}")
             # Add timeout to prevent hanging
             response = requests.post(invite_url, json=payload, headers=headers, timeout=30)
-            print(f"Invite response status: {response.status_code}")
+            print(f"📡 [INVITE] Response status: {response.status_code}")
+            print(f"📋 [INVITE] Response headers: {dict(response.headers)}")
+            print(f"📄 [INVITE] Response text (first 500 chars): {response.text[:500]}")
             
             if response.status_code not in [200, 201]:
-                error_data = response.json() if response.text else {}
-                error_msg = error_data.get("message", response.text)
+                try:
+                    error_data = response.json()
+                    print(f"❌ [INVITE] Error response JSON: {error_data}")
+                    error_msg = error_data.get("message") or error_data.get("error") or response.text
+                except:
+                    error_msg = response.text
+                    print(f"❌ [INVITE] Error response (non-JSON): {error_msg}")
                 
-                if "already registered" in error_msg.lower() or "already exists" in error_msg.lower():
+                if "already registered" in str(error_msg).lower() or "already exists" in str(error_msg).lower():
                     raise HTTPException(
                         status_code=400,
                         detail="User with this email already exists"
@@ -364,8 +390,177 @@ async def invite_user(
                     detail=f"Failed to send invite: {error_msg}"
                 )
             
-            invite_data_response = response.json()
-            invited_user_id = invite_data_response.get("id")
+            try:
+                invite_data_response = response.json()
+                print(f"✅ [INVITE] Success response: {invite_data_response}")
+                invited_user_id = invite_data_response.get("id")
+                
+                # Check if email was sent (Supabase may return confirmation)
+                email_sent = False
+                if "email" in invite_data_response:
+                    print(f"👤 [INVITE] User created with email: {invite_data_response.get('email')}")
+                
+                if "confirmation_sent_at" in invite_data_response:
+                    confirmation_time = invite_data_response.get("confirmation_sent_at")
+                    print(f"📬 [INVITE] ✅ Confirmation email sent at: {confirmation_time}")
+                    email_sent = True
+                else:
+                    print(f"⚠️  [INVITE] No 'confirmation_sent_at' field in response")
+                
+                if "invite_sent_at" in invite_data_response:
+                    invite_time = invite_data_response.get("invite_sent_at")
+                    print(f"📨 [INVITE] ✅ Invite email sent at: {invite_time}")
+                    email_sent = True
+                else:
+                    print(f"⚠️  [INVITE] No 'invite_sent_at' field in response")
+                
+                if "last_sign_in_at" in invite_data_response:
+                    print(f"🔐 [INVITE] Last sign in: {invite_data_response.get('last_sign_in_at')}")
+                
+                if not email_sent:
+                    print(f"⚠️  [INVITE] ⚠️  WARNING: No email confirmation fields found in response!")
+                    print(f"📧 [INVITE] Supabase didn't send email, using Resend API directly...")
+                    
+                    # Generate invite link from Supabase and send via Resend
+                    try:
+                        # Step 1: Generate invite link from Supabase
+                        generate_link_url = f"{supabase_url}/auth/v1/admin/generate_link"
+                        generate_link_payload = {
+                            "type": "invite",
+                            "email": invite_data.email,
+                            "redirect_to": f"{FRONTEND_URL}/auth/accept-invite"
+                        }
+                        print(f"🔗 [INVITE] Generating invite link via Supabase...")
+                        generate_response = requests.post(generate_link_url, json=generate_link_payload, headers=headers, timeout=30)
+                        print(f"📡 [INVITE] Generate link response status: {generate_response.status_code}")
+                        
+                        if generate_response.status_code not in [200, 201]:
+                            print(f"❌ [INVITE] Failed to generate link: {generate_response.text}")
+                            raise Exception(f"Failed to generate invite link: {generate_response.text}")
+                        
+                        link_data = generate_response.json()
+                        invite_link = None
+                        
+                        if "properties" in link_data and "action_link" in link_data.get("properties", {}):
+                            invite_link = link_data["properties"]["action_link"]
+                        elif "action_link" in link_data:
+                            invite_link = link_data["action_link"]
+                        elif "link" in link_data:
+                            invite_link = link_data["link"]
+                        
+                        if not invite_link:
+                            print(f"❌ [INVITE] No invite link found in response: {link_data}")
+                            raise Exception("No invite link in Supabase response")
+                        
+                        print(f"✅ [INVITE] Invite link generated: {invite_link[:100]}...")
+                        
+                        # Step 2: Send email via Resend API
+                        # Reload env vars to ensure we have the latest (load from backend directory)
+                        from dotenv import load_dotenv
+                        import pathlib
+                        backend_dir = pathlib.Path(__file__).parent
+                        env_path = backend_dir / ".env"
+                        load_dotenv(dotenv_path=env_path)
+                        print(f"📁 [INVITE] Loading .env from: {env_path}")
+                        print(f"📁 [INVITE] .env file exists: {env_path.exists()}")
+                        
+                        resend_api_key = os.getenv("RESEND_API_KEY")
+                        print(f"🔑 [INVITE] Checking RESEND_API_KEY: {'✅ Found' if resend_api_key else '❌ NOT FOUND'}")
+                        if resend_api_key:
+                            print(f"🔑 [INVITE] Key length: {len(resend_api_key)} chars, starts with: {resend_api_key[:10]}...")
+                        if not resend_api_key:
+                            print(f"⚠️  [INVITE] RESEND_API_KEY not found in environment variables")
+                            print(f"💡 [INVITE] Resend API is optional. To enable email sending:")
+                            print(f"💡 [INVITE]   1. Get API key from https://resend.com/api-keys")
+                            print(f"💡 [INVITE]   2. Add RESEND_API_KEY=your_key to backend/.env")
+                            print(f"💡 [INVITE]   3. Optionally set RESEND_FROM_EMAIL and RESEND_FROM_NAME")
+                            print(f"💡 [INVITE] Alternative: Configure Supabase SMTP in Dashboard → Settings → Auth")
+                            print(f"💡 [INVITE] Invite link generated: {invite_link}")
+                            print(f"💡 [INVITE] You can manually send this link to {invite_data.email}")
+                            # Don't raise exception - just skip Resend email sending
+                            # The invite link will be returned in the response
+                            raise Exception("RESEND_API_KEY_NOT_SET")  # Special exception to skip Resend
+                        
+                        # Get sender email from env or use a default
+                        sender_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+                        sender_name = os.getenv("RESEND_FROM_NAME", "Divisadero")
+                        
+                        resend_url = "https://api.resend.com/emails"
+                        resend_headers = {
+                            "Authorization": f"Bearer {resend_api_key}",
+                            "Content-Type": "application/json"
+                        }
+                        
+                        email_subject = f"Invitation to join {org_slug}"
+                        email_html = f"""
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta charset="utf-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        </head>
+                        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <div style="background: #f9fafb; border-radius: 8px; padding: 30px; text-align: center;">
+                                <h1 style="color: #1a1a1a; margin-top: 0;">You've been invited!</h1>
+                                <p style="font-size: 16px; color: #666; margin: 20px 0;">
+                                    You've been invited to join <strong>{org_slug}</strong> on Divisadero.
+                                </p>
+                                <a href="{invite_link}" 
+                                   style="display: inline-block; background: #3b82f6; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; margin: 20px 0;">
+                                    Accept Invitation
+                                </a>
+                                <p style="font-size: 14px; color: #999; margin-top: 30px;">
+                                    Or copy and paste this link into your browser:<br>
+                                    <a href="{invite_link}" style="color: #3b82f6; word-break: break-all;">{invite_link}</a>
+                                </p>
+                                <p style="font-size: 12px; color: #999; margin-top: 30px;">
+                                    This invitation link will expire in 7 days.
+                                </p>
+                            </div>
+                        </body>
+                        </html>
+                        """
+                        
+                        resend_payload = {
+                            "from": f"{sender_name} <{sender_email}>",
+                            "to": [invite_data.email],
+                            "subject": email_subject,
+                            "html": email_html
+                        }
+                        
+                        print(f"📧 [INVITE] Sending email via Resend API to {invite_data.email}...")
+                        resend_response = requests.post(resend_url, json=resend_payload, headers=resend_headers, timeout=30)
+                        print(f"📡 [INVITE] Resend API response status: {resend_response.status_code}")
+                        print(f"📄 [INVITE] Resend API response: {resend_response.text[:500]}")
+                        
+                        if resend_response.status_code in [200, 201]:
+                            resend_data = resend_response.json()
+                            print(f"✅ [INVITE] ✅ Email sent successfully via Resend!")
+                            print(f"📬 [INVITE] Resend email ID: {resend_data.get('id', 'N/A')}")
+                            email_sent = True  # Mark as sent since we sent it via Resend
+                        else:
+                            error_msg = resend_response.text
+                            print(f"❌ [INVITE] Resend API failed: {error_msg}")
+                            raise Exception(f"Resend API error: {error_msg}")
+                            
+                    except Exception as resend_error:
+                        print(f"❌ [INVITE] Error sending email via Resend: {resend_error}")
+                        import traceback
+                        traceback.print_exc()
+                        # Don't fail the whole request - user is created, just email failed
+                        print(f"⚠️  [INVITE] User created but email sending failed. Invite link: {invite_link if 'invite_link' in locals() else 'N/A'}")
+                    
+                    print(f"💡 [INVITE] Check Supabase Dashboard → Logs → Auth Logs for email status")
+                    print(f"💡 [INVITE] Verify email templates are configured in Supabase Dashboard")
+                    print(f"💡 [INVITE] Check SMTP/Resend configuration in Supabase Settings → Auth → SMTP Settings")
+                    
+            except Exception as parse_error:
+                print(f"❌ [INVITE] Error parsing response JSON: {parse_error}")
+                print(f"📄 [INVITE] Raw response: {response.text}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Unexpected response format from Supabase: {str(parse_error)}"
+                )
             
         except HTTPException:
             raise
@@ -401,13 +596,19 @@ async def invite_user(
                         "is_activated": False
                     }).eq("id", invited_user_id).execute()
             except Exception as e:
-                print(f"Warning: Could not create/update profile: {e}")
+                print(f"⚠️  [INVITE] Warning: Could not create/update profile: {e}")
                 # Continue anyway - profile might be created later
+        
+        # Log success details
+        print(f"✅ [INVITE] ✓ Invitation API call successful for {invite_data.email}")
+        print(f"🆔 [INVITE] User ID: {invited_user_id}")
+        # Note: email_sent status is logged above in the email sending section
         
         return {
             "status": "success",
             "message": f"Invitation sent to {invite_data.email}",
-            "user_id": invited_user_id
+            "user_id": invited_user_id,
+            "note": "Check Supabase Dashboard → Logs → Auth Logs to verify email delivery"
         }
         
     except HTTPException:
