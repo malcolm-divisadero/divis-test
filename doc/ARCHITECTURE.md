@@ -168,6 +168,11 @@ VITE_API_URL=http://localhost:8000
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# Optional: For email sending (if Supabase SMTP not configured)
+# RESEND_API_KEY=re_your_resend_api_key
+# RESEND_FROM_EMAIL=noreply@yourdomain.com
+# RESEND_FROM_NAME=Divisadero
 ```
 
 ## Common Patterns

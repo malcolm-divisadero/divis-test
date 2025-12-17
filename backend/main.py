@@ -397,6 +397,7 @@ async def invite_user(
                 
                 # Check if email was sent (Supabase may return confirmation)
                 email_sent = False
+                invite_link = None  # Initialize invite_link variable
                 if "email" in invite_data_response:
                     print(f"👤 [INVITE] User created with email: {invite_data_response.get('email')}")
                 
@@ -544,9 +545,14 @@ async def invite_user(
                             raise Exception(f"Resend API error: {error_msg}")
                             
                     except Exception as resend_error:
-                        print(f"❌ [INVITE] Error sending email via Resend: {resend_error}")
-                        import traceback
-                        traceback.print_exc()
+                        # Check if it's the special "not set" exception
+                        if "RESEND_API_KEY_NOT_SET" in str(resend_error):
+                            print(f"ℹ️  [INVITE] Resend API not configured, skipping email send")
+                            # invite_link is already set, will be returned in response
+                        else:
+                            print(f"❌ [INVITE] Error sending email via Resend: {resend_error}")
+                            import traceback
+                            traceback.print_exc()
                         # Don't fail the whole request - user is created, just email failed
                         print(f"⚠️  [INVITE] User created but email sending failed. Invite link: {invite_link if 'invite_link' in locals() else 'N/A'}")
                     
@@ -604,12 +610,23 @@ async def invite_user(
         print(f"🆔 [INVITE] User ID: {invited_user_id}")
         # Note: email_sent status is logged above in the email sending section
         
-        return {
+        # Build response - include invite link if email wasn't sent via Supabase
+        response_data = {
             "status": "success",
-            "message": f"Invitation sent to {invite_data.email}",
+            "message": f"Invitation sent to {invite_data.email}" if email_sent else f"User created. Email not sent automatically.",
             "user_id": invited_user_id,
-            "note": "Check Supabase Dashboard → Logs → Auth Logs to verify email delivery"
         }
+        
+        # Include invite link if we generated one but didn't send email
+        if not email_sent and invite_link:
+            response_data["invite_link"] = invite_link
+            response_data["note"] = "Email not sent automatically. Please send the invite_link manually or configure Supabase SMTP/Resend API."
+        elif not email_sent:
+            response_data["note"] = "Email not sent. Configure Supabase SMTP or add RESEND_API_KEY to backend/.env to enable email sending."
+        else:
+            response_data["note"] = "Check Supabase Dashboard → Logs → Auth Logs to verify email delivery"
+        
+        return response_data
         
     except HTTPException:
         raise

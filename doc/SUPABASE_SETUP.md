@@ -31,6 +31,11 @@ cp .env.example .env  # If .env.example exists, or create manually
 SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_KEY=your_anon_key_here
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+
+# Optional: Email sending via Resend API (if Supabase SMTP is not configured)
+# RESEND_API_KEY=re_your_resend_api_key_here
+# RESEND_FROM_EMAIL=noreply@yourdomain.com
+# RESEND_FROM_NAME=Divisadero
 ```
 
 ## Step 3: Configure Frontend
@@ -141,6 +146,33 @@ const testConnection = async () => {
   console.log('Connection test:', { data, error })
 }
 ```
+
+## Step 7: Configure Email Sending (Optional)
+
+The invite system needs to send emails to invited users. You have two options:
+
+### Option 1: Configure Supabase SMTP (Recommended)
+
+1. Go to your Supabase Dashboard
+2. Navigate to **Settings** → **Auth** → **SMTP Settings**
+3. Configure your SMTP provider (Gmail, SendGrid, etc.) or use Supabase's built-in email service
+4. Supabase will automatically send invite emails when users are invited
+
+### Option 2: Use Resend API (Fallback)
+
+If Supabase SMTP is not configured, the system will attempt to use Resend API as a fallback:
+
+1. Sign up for a Resend account at https://resend.com
+2. Get your API key from https://resend.com/api-keys
+3. Add to `backend/.env`:
+   ```env
+   RESEND_API_KEY=re_your_api_key_here
+   RESEND_FROM_EMAIL=noreply@yourdomain.com  # Optional
+   RESEND_FROM_NAME=Divisadero  # Optional
+   ```
+4. Restart your backend server
+
+**Note:** If neither option is configured, invite links will still be generated and returned in the API response, but emails won't be sent automatically. You can manually send the invite link to users.
 
 ## Next Steps
 
